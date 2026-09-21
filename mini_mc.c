@@ -299,26 +299,46 @@ int main(void) {
             p->scroll = p->count - visible;
             if (p->scroll < 0) p->scroll = 0;
         }
+else if (ch == KEY_ENTER || ch == '\n') {
+    Panel *p = active_left ? &left : &right;
+    char *name = p->items[p->index];
 
-        else if (ch == KEY_ENTER || ch == '\n') {
-            Panel *p = active_left ? &left : &right;
-            char *name = p->items[p->index];
-            if (strcmp(name, "..") == 0) {
-                char parent[PATH_MAX_LEN];
-                snprintf(parent, sizeof(parent), "%s", p->path);
-                char *slash = strrchr(parent, '/');
-                if (slash && slash != parent) {
-                    *slash = '\0';
-                    snprintf(p->path, sizeof(p->path), "%s", parent);
-                }
-                list_dir(p);
-            } else if (is_dir(p->path, name)) {
-                char newpath[PATH_MAX_LEN];
-                snprintf(newpath, sizeof(newpath), "%s/%s", p->path, name);
-                snprintf(p->path, sizeof(p->path), "%s", newpath);
-                list_dir(p);
-            }
+    // --- GO UP DIRECTORY ---
+    if (strcmp(name, "..") == 0) {
+
+        char *slash1 = strrchr(p->path, '/');
+        char *slash2 = strrchr(p->path, '\\');
+        char *slash = (slash1 > slash2 ? slash1 : slash2);
+
+        if (slash && slash != p->path) {
+            *slash = '\0';
         }
+
+        list_dir(p);
+        p->index = 0;
+        p->scroll = 0;
+
+        // DO NOT return from main()
+    }
+
+    // --- GO DOWN DIRECTORY ---
+    else if (is_dir(p->path, name)) {
+
+        char newpath[PATH_MAX_LEN];
+        snprintf(newpath, sizeof(newpath), "%s/%s", p->path, name);
+
+        snprintf(p->path, sizeof(p->path), "%s", newpath);
+
+        list_dir(p);
+        p->index = 0;
+        p->scroll = 0;
+
+        // DO NOT return from main()
+    }
+}
+
+
+        
 
         else if (ch == KEY_F(2)) {
             command_line();
