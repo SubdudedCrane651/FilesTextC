@@ -147,6 +147,9 @@ void draw_panel(Panel *p, int active, int startx, int width) {
     getmaxyx(stdscr, h, w);
     int visible = h - 3;
 
+    wbkgd(stdscr, COLOR_PAIR(10));   // ensures panel area inherits blue background
+
+
     // FILL PANEL AREA WITH BLUE BACKGROUND
     for (int y = 1; y < h - 1; y++) {
         for (int x = startx; x < startx + width; x++) {
@@ -264,11 +267,14 @@ int main(void) {
     curs_set(0);
 
     start_color();
-    init_pair(10, COLOR_WHITE, COLOR_BLUE);   // MC blue background
-    use_default_colors();
-    init_pair(1, COLOR_BLUE, -1);
-    init_pair(2, COLOR_GREEN, -1);
-    init_pair(3, -1, -1);
+use_default_colors();
+
+init_pair(1, COLOR_CYAN,  COLOR_BLUE);  // directories
+init_pair(2, COLOR_GREEN, COLOR_BLUE);  // executables
+init_pair(3, COLOR_WHITE, COLOR_BLUE);  // normal files
+
+init_pair(10, COLOR_WHITE, COLOR_BLUE); // general background / bottom bar
+
 
     list_dir(&left);
     list_dir(&right);
