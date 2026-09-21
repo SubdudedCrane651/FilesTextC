@@ -1,0 +1,1 @@
+gcc mini_mc.c -o mini_mc -IC:/pdcurses-3.8 -LC:/pdcurses-3.8/wincon -l:pdcurses.a -static

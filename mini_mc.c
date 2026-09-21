@@ -5,6 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <sys/stat.h>
+#include <time.h>
+
 
 #define MAX_ITEMS 2048
 #define PATH_MAX_LEN 4096
@@ -124,12 +127,45 @@ int confirm_dialog(const char *message) {
     }
 }
 
+void format_size(long size, char *out, int outlen) {
+    if (size < 1024)
+        snprintf(out, outlen, "%ld B", size);
+    else if (size < 1024 * 1024)
+        snprintf(out, outlen, "%ld KB", size / 1024);
+    else
+        snprintf(out, outlen, "%ld MB", size / (1024 * 1024));
+}
+
+void format_date(time_t t, char *out, int outlen) {
+    struct tm *tm = localtime(&t);
+    strftime(out, outlen, "%Y-%m-%d %H:%M", tm);
+}
+
+
 void draw_panel(Panel *p, int active, int startx, int width) {
     int h, w;
     getmaxyx(stdscr, h, w);
     int visible = h - 3;
 
+    // MC BLUE BACKGROUND
+    for (int y = 0; y < h - 1; y++) {
+        for (int x = startx; x < startx + width; x++) {
+            mvaddch(y, x, ' ' | COLOR_PAIR(10));
+        }
+    }
+
+    // WHITE FRAME
+    attron(COLOR_PAIR(20));
+    mvvline(1, startx, ACS_VLINE, h - 2);
+    mvvline(1, startx + width - 1, ACS_VLINE, h - 2);
+    mvhline(0, startx, ACS_HLINE, width);
+    mvhline(h - 1, startx, ACS_HLINE, width);
+    attroff(COLOR_PAIR(20));
+
+    // TITLE BAR
+    attron(COLOR_PAIR(20));
     mvprintw(0, startx + 1, "%.*s", width - 2, p->path);
+    attroff(COLOR_PAIR(20));
 
     int start = p->scroll;
     int end = p->scroll + visible;
@@ -138,14 +174,11 @@ void draw_panel(Panel *p, int active, int startx, int width) {
     for (int i = start; i < end; i++) {
         int y = (i - start) + 1;
         char *name = p->items[i];
-        char display[PATH_MAX_LEN];
-        snprintf(display, sizeof(display), "%s%s",
-                 name, is_dir(p->path, name) ? "/" : "");
 
-        int attr = A_NORMAL;
-        if (active && i == p->index) attr |= A_REVERSE;
+        char fullpath[PATH_MAX_LEN];
+        snprintf(fullpath, sizeof(fullpath), "%s/%s", p->path, name);
 
-        // color
+        // Determine color
         int color = 0;
         if (is_dir(p->path, name)) {
             color = COLOR_PAIR(1);
@@ -155,11 +188,33 @@ void draw_panel(Panel *p, int active, int startx, int width) {
             color = COLOR_PAIR(3);
         }
 
-        mvaddnstr(y, startx + 1, display, width - 2);
-        mvchgat(y, startx + 1, width - 2, attr, 0, NULL);
-        mvchgat(y, startx + 1, (int)strlen(display), attr | color, 0, NULL);
+        // File stats
+        struct stat st;
+        long size = 0;
+        time_t mtime = 0;
+
+        if (stat(fullpath, &st) == 0) {
+            size = st.st_size;
+            mtime = st.st_mtime;
+        }
+
+        char sizebuf[32];
+        char datebuf[64];
+        format_size(size, sizebuf, sizeof(sizebuf));
+        format_date(mtime, datebuf, sizeof(datebuf));
+
+        char line[256];
+        snprintf(line, sizeof(line), "%-30s %10s  %s", name, sizebuf, datebuf);
+
+        int attr = A_NORMAL;
+        if (active && i == p->index)
+            attr |= A_REVERSE;
+
+        mvaddnstr(y, startx + 1, line, width - 2);
+        mvchgat(y, startx + 1, width - 2, attr | color, 0, NULL);
     }
 }
+
 
 void edit_file(const char *dir, const char *name) {
     char full[PATH_MAX_LEN];
