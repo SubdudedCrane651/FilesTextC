@@ -141,6 +141,47 @@ void format_date(time_t t, char *out, int outlen) {
     strftime(out, outlen, "%Y-%m-%d %H:%M", tm);
 }
 
+void draw_title_bar(Panel *p, int startx, int width) {
+    if (p->count == 0) return;
+
+    char *name = p->items[p->index];
+    char fullpath[PATH_MAX_LEN];
+    snprintf(fullpath, sizeof(fullpath), "%s/%s", p->path, name);
+
+    struct stat st;
+    long size = 0;
+    time_t mtime = 0;
+
+    if (stat(fullpath, &st) == 0) {
+        size = st.st_size;
+        mtime = st.st_mtime;
+    }
+
+    // Format size
+    char sizebuf[32];
+    if (size < 1024)
+        snprintf(sizebuf, sizeof(sizebuf), "%ld B", size);
+    else if (size < 1024 * 1024)
+        snprintf(sizebuf, sizeof(sizebuf), "%ld KB", size / 1024);
+    else
+        snprintf(sizebuf, sizeof(sizebuf), "%ld MB", size / (1024 * 1024));
+
+    // Format date
+    char datebuf[64];
+    struct tm *tm_info = localtime(&mtime);
+    strftime(datebuf, sizeof(datebuf), "%Y-%m-%d %H:%M", tm_info);
+
+    char line[256];
+    snprintf(line, sizeof(line), "%s   %s   %s", name, sizebuf, datebuf);
+
+    int h, w;
+    getmaxyx(stdscr, h, w);
+
+    // Draw title bar one line above command bar
+    attron(COLOR_PAIR(10));
+    mvaddnstr(h - 2, startx + 1, line, width - 2);
+    attroff(COLOR_PAIR(10));
+}
 
 void draw_panel(Panel *p, int active, int startx, int width) {
     int h, w;
@@ -293,6 +334,12 @@ init_pair(10, COLOR_WHITE, COLOR_BLUE); // general background / bottom bar
 
     draw_panel(&left, active_left, 0, half);
     draw_panel(&right, !active_left, half, w - half);
+
+    if (active_left)
+    draw_title_bar(&left, 0, half);
+else
+    draw_title_bar(&right, half, w - half);
+
 
     attron(COLOR_PAIR(10));
     mvprintw(h - 1, 1,
