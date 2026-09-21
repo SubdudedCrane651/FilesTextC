@@ -147,8 +147,8 @@ void draw_panel(Panel *p, int active, int startx, int width) {
     getmaxyx(stdscr, h, w);
     int visible = h - 3;
 
-    // MC BLUE BACKGROUND
-    for (int y = 0; y < h - 1; y++) {
+    // FILL PANEL AREA WITH BLUE BACKGROUND
+    for (int y = 1; y < h - 1; y++) {
         for (int x = startx; x < startx + width; x++) {
             mvaddch(y, x, ' ' | COLOR_PAIR(10));
         }
@@ -264,6 +264,7 @@ int main(void) {
     curs_set(0);
 
     start_color();
+    init_pair(10, COLOR_WHITE, COLOR_BLUE);   // MC blue background
     use_default_colors();
     init_pair(1, COLOR_BLUE, -1);
     init_pair(2, COLOR_GREEN, -1);
@@ -275,17 +276,24 @@ int main(void) {
     int active_left = 1;
 
     while (1) {
-        clear();
-        int h, w;
-        getmaxyx(stdscr, h, w);
-        int half = w / 2;
+    int h, w;
+    getmaxyx(stdscr, h, w);
+    int half = w / 2;
 
-        draw_panel(&left, active_left, 0, half);
-        draw_panel(&right, !active_left, half, w - half);
+    // Paint full terminal blue
+    for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++)
+            mvaddch(y, x, ' ' | COLOR_PAIR(10));
 
-        mvprintw(h - 1, 1,
-                 "F2 Cmd  F4 Edit  F5 Copy  F6 Move  F8 Delete  Tab Switch  PgUp/PgDn Home/End  q Quit");
-        refresh();
+    draw_panel(&left, active_left, 0, half);
+    draw_panel(&right, !active_left, half, w - half);
+
+    attron(COLOR_PAIR(10));
+    mvprintw(h - 1, 1,
+             "F2 Cmd  F4 Edit  F5 Copy  F6 Move  F8 Delete  Tab Switch  PgUp/PgDn Home/End  q Quit");
+    attroff(COLOR_PAIR(10));
+
+    refresh();
 
         int ch = getch();
 
@@ -392,9 +400,7 @@ else if (ch == KEY_ENTER || ch == '\n') {
     }
 }
 
-
-        
-
+  
         else if (ch == KEY_F(2)) {
             command_line();
             list_dir(&left);
