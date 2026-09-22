@@ -191,16 +191,64 @@ void copy_item(const char *src_dir, const char *name, const char *dst_dir) {
 
 void move_item(const char *src_dir, const char *name, const char *dst_dir) {
     char src[PATH_MAX_LEN], dst[PATH_MAX_LEN];
-    snprintf(src, sizeof(src), "%s/%s", src_dir, name);
-    snprintf(dst, sizeof(dst), "%s/%s", dst_dir, name);
-    rename(src, dst);
+    snprintf(src, sizeof(src), "%s\\%s", src_dir, name);
+    snprintf(dst, sizeof(dst), "%s\\%s", dst_dir, name);
+
+    // Try simple move first
+    if (MoveFileA(src, dst)) {
+        return;
+    }
+
+    // If simple move fails (e.g. cross-drive), use MoveFileEx
+    MoveFileExA(src, dst, MOVEFILE_COPY_ALLOWED | MOVEFILE_WRITE_THROUGH);
 }
+
+void delete_directory(const char *path) {
+    WIN32_FIND_DATAA fd;
+    char search[PATH_MAX_LEN];
+
+    snprintf(search, sizeof(search), "%s\\*.*", path);
+
+    HANDLE h = FindFirstFileA(search, &fd);
+    if (h == INVALID_HANDLE_VALUE) {
+        // Directory empty or unreadable
+        RemoveDirectoryA(path);
+        return;
+    }
+
+    do {
+        if (strcmp(fd.cFileName, ".") == 0 || strcmp(fd.cFileName, "..") == 0)
+            continue;
+
+        char full[PATH_MAX_LEN];
+        snprintf(full, sizeof(full), "%s\\%s", path, fd.cFileName);
+
+        if (is_directory(full)) {
+            delete_directory(full);   // recursion
+        } else {
+            DeleteFileA(full);
+        }
+
+    } while (FindNextFileA(h, &fd));
+
+    FindClose(h);
+
+    // Remove the now-empty directory
+    RemoveDirectoryA(path);
+}
+
 
 void delete_item(const char *dir, const char *name) {
     char full[PATH_MAX_LEN];
-    snprintf(full, sizeof(full), "%s/%s", dir, name);
-    remove(full);
+    snprintf(full, sizeof(full), "%s\\%s", dir, name);
+
+    if (is_directory(full)) {
+        delete_directory(full);
+    } else {
+        DeleteFileA(full);
+    }
 }
+
 
 int confirm_dialog(const char *message) {
     int h, w;
