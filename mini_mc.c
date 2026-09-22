@@ -112,24 +112,81 @@ int is_exec(const char *dir, const char *name) {
     return 0;
 }
 
+int is_directory(const char *path) {
+    struct stat st;
+    if (stat(path, &st) != 0) return 0;
+    return S_ISDIR(st.st_mode);
+}
+
+void ensure_dir(const char *path) {
+    CreateDirectoryA(path, NULL);   // Windows API
+}
+
+void copy_directory(const char *src, const char *dst) {
+    ensure_dir(dst);
+
+    WIN32_FIND_DATAA fd;
+    char search[PATH_MAX_LEN];
+    snprintf(search, sizeof(search), "%s\\*.*", src);
+
+    HANDLE h = FindFirstFileA(search, &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+
+    do {
+        if (strcmp(fd.cFileName, ".") == 0 || strcmp(fd.cFileName, "..") == 0)
+            continue;
+
+        char src_path[PATH_MAX_LEN];
+        char dst_path[PATH_MAX_LEN];
+
+        snprintf(src_path, sizeof(src_path), "%s\\%s", src, fd.cFileName);
+        snprintf(dst_path, sizeof(dst_path), "%s\\%s", dst, fd.cFileName);
+
+        if (is_directory(src_path)) {
+            copy_directory(src_path, dst_path);   // recursion
+        } else {
+            // file copy
+            FILE *fs = fopen(src_path, "rb");
+            if (!fs) continue;
+            FILE *fdst = fopen(dst_path, "wb");
+            if (!fdst) { fclose(fs); continue; }
+
+            char buf[8192];
+            size_t n;
+            while ((n = fread(buf, 1, sizeof(buf), fs)) > 0) {
+                fwrite(buf, 1, n, fdst);
+            }
+            fclose(fs);
+            fclose(fdst);
+        }
+
+    } while (FindNextFileA(h, &fd));
+
+    FindClose(h);
+}
+
+
 void copy_item(const char *src_dir, const char *name, const char *dst_dir) {
     char src[PATH_MAX_LEN], dst[PATH_MAX_LEN];
-    snprintf(src, sizeof(src), "%s/%s", src_dir, name);
-    snprintf(dst, sizeof(dst), "%s/%s", dst_dir, name);
+    snprintf(src, sizeof(src), "%s\\%s", src_dir, name);
+    snprintf(dst, sizeof(dst), "%s\\%s", dst_dir, name);
 
-    // simple file copy (no dirs)
-    FILE *fs = fopen(src, "rb");
-    if (!fs) return;
-    FILE *fd = fopen(dst, "wb");
-    if (!fd) { fclose(fs); return; }
+    if (is_directory(src)) {
+        copy_directory(src, dst);
+    } else {
+        FILE *fs = fopen(src, "rb");
+        if (!fs) return;
+        FILE *fd = fopen(dst, "wb");
+        if (!fd) { fclose(fs); return; }
 
-    char buf[8192];
-    size_t n;
-    while ((n = fread(buf, 1, sizeof(buf), fs)) > 0) {
-        fwrite(buf, 1, n, fd);
+        char buf[8192];
+        size_t n;
+        while ((n = fread(buf, 1, sizeof(buf), fs)) > 0) {
+            fwrite(buf, 1, n, fd);
+        }
+        fclose(fs);
+        fclose(fd);
     }
-    fclose(fs);
-    fclose(fd);
 }
 
 void move_item(const char *src_dir, const char *name, const char *dst_dir) {
