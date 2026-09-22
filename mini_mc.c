@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <windows.h>
+#include <shellapi.h>
 
 
 #define MAX_ITEMS 2048
@@ -26,6 +28,50 @@ void free_items(Panel *p) {
     }
     p->count = 0;
 }
+
+void run_file(const char *path, const char *name) {
+    char full[PATH_MAX_LEN];
+    snprintf(full, sizeof(full), "%s\\%s", path, name);
+
+    // --- EXE ---
+    if (stricmp(name + strlen(name) - 4, ".exe") == 0) {
+        ShellExecuteA(NULL, "open", full, NULL, NULL, SW_SHOWNORMAL);
+        return;
+    }
+
+    // --- BAT / CMD ---
+    if (stricmp(name + strlen(name) - 4, ".bat") == 0 ||
+        stricmp(name + strlen(name) - 4, ".cmd") == 0) {
+
+        char cmdline[PATH_MAX_LEN + 32];
+        snprintf(cmdline, sizeof(cmdline), "cmd.exe /c \"%s\"", full);
+
+        ShellExecuteA(NULL, "open", "cmd.exe", cmdline + 11, NULL, SW_SHOWNORMAL);
+        return;
+    }
+
+    // --- PowerShell PS1 ---
+    if (stricmp(name + strlen(name) - 4, ".ps1") == 0) {
+
+        char psline[PATH_MAX_LEN + 64];
+        snprintf(psline, sizeof(psline),
+                 "powershell.exe -ExecutionPolicy Bypass -File \"%s\"", full);
+
+        ShellExecuteA(NULL, "open", "powershell.exe",
+                      psline + strlen("powershell.exe "), NULL, SW_SHOWNORMAL);
+        return;
+    }
+
+    // --- Python script ---
+    if (stricmp(name + strlen(name) - 3, ".py") == 0) {
+        ShellExecuteA(NULL, "open", "python.exe", full, NULL, SW_SHOWNORMAL);
+        return;
+    }
+
+    // --- Everything else: open with default Windows app ---
+    ShellExecuteA(NULL, "open", full, NULL, NULL, SW_SHOWNORMAL);
+}
+
 
 void list_dir(Panel *p) {
     DIR *d;
@@ -408,6 +454,7 @@ init_pair(10, COLOR_WHITE, COLOR_BLUE); // general background / bottom bar
             p->scroll = p->count - visible;
             if (p->scroll < 0) p->scroll = 0;
         }
+
 else if (ch == KEY_ENTER || ch == '\n') {
     Panel *p = active_left ? &left : &right;
     char *name = p->items[p->index];
@@ -428,6 +475,7 @@ else if (ch == KEY_ENTER || ch == '\n') {
         p->scroll = 0;
 
         // DO NOT return from main()
+       
     }
 
     // --- GO DOWN DIRECTORY ---
@@ -441,8 +489,11 @@ else if (ch == KEY_ENTER || ch == '\n') {
         list_dir(p);
         p->index = 0;
         p->scroll = 0;
-
+    }
         // DO NOT return from main()
+         // --- RUN FILE ---
+    else {
+        run_file(p->path, name);
     }
 }
 
