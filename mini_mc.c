@@ -336,6 +336,39 @@ void command_line() {
     refresh();
 }
 
+char message[256] = "";
+
+char *input_box(const char *prompt) {
+    static char buffer[PATH_MAX_LEN];
+
+    int h, w;
+    getmaxyx(stdscr, h, w);
+
+    // Draw prompt line
+    attron(COLOR_PAIR(10));
+    mvprintw(h - 3, 1, "%s", prompt);
+    for (int i = strlen(prompt); i < w - 2; i++)
+        addch(' ');
+    attroff(COLOR_PAIR(10));
+
+    // Draw input line
+    attron(COLOR_PAIR(10));
+    mvprintw(h - 2, 1, "> ");
+    attroff(COLOR_PAIR(10));
+
+    echo();
+    curs_set(1);
+
+    // Read input
+    mvgetnstr(h - 2, 3, buffer, PATH_MAX_LEN - 1);
+
+    noecho();
+    curs_set(0);
+
+    return buffer;
+}
+
+
 int main(void) {
     Panel left, right;
     getcwd(left.path, sizeof(left.path));
@@ -382,7 +415,7 @@ init_pair(10, COLOR_WHITE, COLOR_BLUE); // general background / bottom bar
 
     attron(COLOR_PAIR(10));
     mvprintw(h - 1, 1,
-             "F2 Cmd  F4 Edit  F5 Copy  F6 Move  F8 Delete  Tab Switch  PgUp/PgDn Home/End  q Quit");
+             "F2 Cmd  F4 Edit  F5 Copy  F6 Move  F7 Input dir  F8 Delete  Tab Switch  PgUp/PgDn Home/End  q Quit");
     attroff(COLOR_PAIR(10));
 
     refresh();
@@ -542,6 +575,25 @@ else if (ch == KEY_ENTER || ch == '\n') {
                 }
             }
         }
+
+       else if (ch == KEY_F(7)) {
+    char *newpath = input_box("Enter directory path:");
+
+    if (is_dir(newpath, "")) {
+        Panel *p = active_left ? &left : &right;
+
+        snprintf(p->path, sizeof(p->path), "%s", newpath);
+        list_dir(p);
+        p->index = 0;
+        p->scroll = 0;
+
+        snprintf(message, sizeof(message), "Directory changed to %s", newpath);
+    } else {
+        snprintf(message, sizeof(message), "Invalid directory: %s", newpath);
+    }
+}
+
+
 
         else if (ch == KEY_F(8)) {
             Panel *p = active_left ? &left : &right;
