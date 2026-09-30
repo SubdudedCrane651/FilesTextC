@@ -90,12 +90,12 @@ void free_items(Panel *p) {
 
 int sort_popup() {
     const char *options[] = {
-        "Name (A → Z)",
-        "Name (Z → A)",
-        "Size (small → large)",
-        "Size (large → small)",
-        "Date (old → new)",
-        "Date (new → old)"
+        "Name (A->Z)",
+        "Name (Z->A)",
+        "Size (small->large)",
+        "Size (large->small)",
+        "Date (old->new)",
+        "Date (new->old)"
     };
     const int count = sizeof(options) / sizeof(options[0]);
 
@@ -108,7 +108,7 @@ int sort_popup() {
     int win_x = (w - win_w) / 2;
 
     WINDOW *win = newwin(win_h, win_w, win_y, win_x);
-    keypad(win, TRUE);        // REQUIRED for arrow keys
+    keypad(win, TRUE);
     box(win, 0, 0);
     mvwprintw(win, 1, 2, "Sort by:");
 
@@ -148,8 +148,10 @@ void sort_items(Panel *p, int mode) {
 
     if (count <= 1) return;
 
-    char fullpaths[count][PATH_MAX_LEN];
+    // Allocate fullpaths dynamically (SAFE)
+    char **fullpaths = malloc(count * sizeof(char*));
     for (int i = 0; i < count; i++) {
+        fullpaths[i] = malloc(PATH_MAX_LEN);
         snprintf(fullpaths[i], PATH_MAX_LEN, "%s/%s",
                  p->path, p->items[start + i]);
     }
@@ -159,25 +161,21 @@ void sort_items(Panel *p, int mode) {
 
             int cmp = 0;
 
+            // NAME SORTING
             if (mode == 0)
-                cmp = strcmp(p->items[start + i], p->items[start + j]);
+                cmp = strcmp(p->items[start + i], p->items[start + j]) > 0;
             else if (mode == 1)
-                cmp = strcmp(p->items[start + j], p->items[start + i]);
+                cmp = strcmp(p->items[start + i], p->items[start + j]) < 0;
+
+            // SIZE / DATE SORTING
             else {
                 struct stat si, sj;
 
-                // ⭐ FIX: SAFE STAT — prevents crashes in F:\ root
-                if (stat(fullpaths[i], &si) != 0) {
+                if (stat(fullpaths[i], &si) != 0)
                     memset(&si, 0, sizeof(si));
-                    si.st_size = 0;
-                    si.st_mtime = 0;
-                }
 
-                if (stat(fullpaths[j], &sj) != 0) {
+                if (stat(fullpaths[j], &sj) != 0)
                     memset(&sj, 0, sizeof(sj));
-                    sj.st_size = 0;
-                    sj.st_mtime = 0;
-                }
 
                 if (mode == 2) cmp = (si.st_size > sj.st_size);
                 if (mode == 3) cmp = (si.st_size < sj.st_size);
@@ -187,18 +185,26 @@ void sort_items(Panel *p, int mode) {
 
             if (cmp) {
                 char tmp[PATH_MAX_LEN];
+
+                // swap names
                 strcpy(tmp, p->items[start + i]);
                 strcpy(p->items[start + i], p->items[start + j]);
                 strcpy(p->items[start + j], tmp);
 
-                char tmp2[PATH_MAX_LEN];
-                strcpy(tmp2, fullpaths[i]);
-                strcpy(fullpaths[i], fullpaths[j]);
-                strcpy(fullpaths[j], tmp2);
+                // swap fullpaths
+                char *t2 = fullpaths[i];
+                fullpaths[i] = fullpaths[j];
+                fullpaths[j] = t2;
             }
         }
     }
+
+    // free memory
+    for (int i = 0; i < count; i++)
+        free(fullpaths[i]);
+    free(fullpaths);
 }
+
 
 void run_file(const char *path, const char *name) {
     char full[PATH_MAX_LEN];
@@ -248,7 +254,13 @@ void list_dir(Panel *p) {
     DIR *d;
     struct dirent *ent;
 
-    free_items(p);
+    // free old items
+    for (int i = 0; i < p->count; i++) {
+        free(p->items[i]);
+        p->items[i] = NULL;
+    }
+
+    p->count = 0;
     p->index = 0;
     p->scroll = 0;
 
@@ -258,12 +270,13 @@ void list_dir(Panel *p) {
         return;
     }
 
-    // add parent entry
+    // parent entry
     p->items[p->count++] = strdup("..");
 
     while ((ent = readdir(d)) != NULL && p->count < MAX_ITEMS) {
         p->items[p->count++] = strdup(ent->d_name);
     }
+
     closedir(d);
 }
 
