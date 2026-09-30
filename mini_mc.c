@@ -74,12 +74,13 @@ const char *get_icon(enum FileType t) {
 
 
 typedef struct {
-    char path[PATH_MAX_LEN];
-    char *items[MAX_ITEMS];
+    char *items[MAX_ITEMS];   // MUST be pointers
     int count;
     int index;
     int scroll;
+    char path[PATH_MAX_LEN];
 } Panel;
+
 
 void free_items(Panel *p) {
     for (int i = 0; i < p->count; i++) {
@@ -148,7 +149,6 @@ void sort_items(Panel *p, int mode) {
 
     if (count <= 1) return;
 
-    // Allocate fullpaths dynamically (SAFE)
     char **fullpaths = malloc(count * sizeof(char*));
     for (int i = 0; i < count; i++) {
         fullpaths[i] = malloc(PATH_MAX_LEN);
@@ -161,13 +161,11 @@ void sort_items(Panel *p, int mode) {
 
             int cmp = 0;
 
-            // NAME SORTING
             if (mode == 0)
                 cmp = strcmp(p->items[start + i], p->items[start + j]) > 0;
             else if (mode == 1)
                 cmp = strcmp(p->items[start + i], p->items[start + j]) < 0;
 
-            // SIZE / DATE SORTING
             else {
                 struct stat si, sj;
 
@@ -184,26 +182,23 @@ void sort_items(Panel *p, int mode) {
             }
 
             if (cmp) {
-                char tmp[PATH_MAX_LEN];
+                // ⭐ CORRECT SWAP — swap pointers, not strings
+                char *tmp = p->items[start + i];
+                p->items[start + i] = p->items[start + j];
+                p->items[start + j] = tmp;
 
-                // swap names
-                strcpy(tmp, p->items[start + i]);
-                strcpy(p->items[start + i], p->items[start + j]);
-                strcpy(p->items[start + j], tmp);
-
-                // swap fullpaths
-                char *t2 = fullpaths[i];
+                char *tmp2 = fullpaths[i];
                 fullpaths[i] = fullpaths[j];
-                fullpaths[j] = t2;
+                fullpaths[j] = tmp2;
             }
         }
     }
 
-    // free memory
     for (int i = 0; i < count; i++)
         free(fullpaths[i]);
     free(fullpaths);
 }
+
 
 
 void run_file(const char *path, const char *name) {
