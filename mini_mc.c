@@ -143,63 +143,62 @@ int sort_popup() {
 
 
 void sort_items(Panel *p, int mode) {
-    // Skip ".." at index 0
     int start = 1;
     int count = p->count - 1;
 
-    // Build array of full paths for sorting
+    if (count <= 1) return;
+
     char fullpaths[count][PATH_MAX_LEN];
     for (int i = 0; i < count; i++) {
-        snprintf(fullpaths[i], PATH_MAX_LEN, "%s\\%s", p->path, p->items[start + i]);
+        snprintf(fullpaths[i], PATH_MAX_LEN, "%s/%s",
+                 p->path, p->items[start + i]);
     }
 
-    // Sorting function
     for (int i = 0; i < count - 1; i++) {
         for (int j = i + 1; j < count; j++) {
 
             int cmp = 0;
 
-            if (mode == 0) { // Name A→Z
+            if (mode == 0)
                 cmp = strcmp(p->items[start + i], p->items[start + j]);
-            }
-            else if (mode == 1) { // Name Z→A
+            else if (mode == 1)
                 cmp = strcmp(p->items[start + j], p->items[start + i]);
-            }
-            else if (mode == 2) { // Size small→large
+            else {
                 struct stat si, sj;
-                stat(fullpaths[i], &si);
-                stat(fullpaths[j], &sj);
-                cmp = (si.st_size > sj.st_size);
-            }
-            else if (mode == 3) { // Size large→small
-                struct stat si, sj;
-                stat(fullpaths[i], &si);
-                stat(fullpaths[j], &sj);
-                cmp = (si.st_size < sj.st_size);
-            }
-            else if (mode == 4) { // Date old→new
-                struct stat si, sj;
-                stat(fullpaths[i], &si);
-                stat(fullpaths[j], &sj);
-                cmp = (si.st_mtime > sj.st_mtime);
-            }
-            else if (mode == 5) { // Date new→old
-                struct stat si, sj;
-                stat(fullpaths[i], &si);
-                stat(fullpaths[j], &sj);
-                cmp = (si.st_mtime < sj.st_mtime);
+
+                // ⭐ FIX: SAFE STAT — prevents crashes in F:\ root
+                if (stat(fullpaths[i], &si) != 0) {
+                    memset(&si, 0, sizeof(si));
+                    si.st_size = 0;
+                    si.st_mtime = 0;
+                }
+
+                if (stat(fullpaths[j], &sj) != 0) {
+                    memset(&sj, 0, sizeof(sj));
+                    sj.st_size = 0;
+                    sj.st_mtime = 0;
+                }
+
+                if (mode == 2) cmp = (si.st_size > sj.st_size);
+                if (mode == 3) cmp = (si.st_size < sj.st_size);
+                if (mode == 4) cmp = (si.st_mtime > sj.st_mtime);
+                if (mode == 5) cmp = (si.st_mtime < sj.st_mtime);
             }
 
             if (cmp) {
-                char tmp[PATH_MAX_LEN];   // ⭐ FIXED HERE ⭐
+                char tmp[PATH_MAX_LEN];
                 strcpy(tmp, p->items[start + i]);
                 strcpy(p->items[start + i], p->items[start + j]);
                 strcpy(p->items[start + j], tmp);
+
+                char tmp2[PATH_MAX_LEN];
+                strcpy(tmp2, fullpaths[i]);
+                strcpy(fullpaths[i], fullpaths[j]);
+                strcpy(fullpaths[j], tmp2);
             }
         }
     }
 }
-
 
 void run_file(const char *path, const char *name) {
     char full[PATH_MAX_LEN];
