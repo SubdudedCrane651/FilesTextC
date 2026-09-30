@@ -10,9 +10,68 @@
 #include <windows.h>
 #include <shellapi.h>
 
+enum FileType {
+    FT_DIR,
+    FT_EXEC,
+    FT_TEXT,
+    FT_IMAGE,
+    FT_AUDIO,
+    FT_VIDEO,
+    FT_ARCHIVE,
+    FT_CODE,
+    FT_OTHER
+};
 
 #define MAX_ITEMS 2048
 #define PATH_MAX_LEN 4096
+
+enum FileType detect_type(const char *name) {
+    // Directories handled separately
+    const char *ext = strrchr(name, '.');
+    if (!ext) return FT_OTHER;
+
+    ext++; // skip the dot
+
+    if (!strcasecmp(ext, "exe") || !strcasecmp(ext, "bat") || !strcasecmp(ext, "cmd"))
+        return FT_EXEC;
+
+    if (!strcasecmp(ext, "txt") || !strcasecmp(ext, "md") || !strcasecmp(ext, "ini"))
+        return FT_TEXT;
+
+    if (!strcasecmp(ext, "png") || !strcasecmp(ext, "jpg") || !strcasecmp(ext, "jpeg") ||
+        !strcasecmp(ext, "gif") || !strcasecmp(ext, "bmp"))
+        return FT_IMAGE;
+
+    if (!strcasecmp(ext, "mp3") || !strcasecmp(ext, "wav") || !strcasecmp(ext, "flac"))
+        return FT_AUDIO;
+
+    if (!strcasecmp(ext, "mp4") || !strcasecmp(ext, "avi") || !strcasecmp(ext, "mkv"))
+        return FT_VIDEO;
+
+    if (!strcasecmp(ext, "zip") || !strcasecmp(ext, "rar") || !strcasecmp(ext, "7z"))
+        return FT_ARCHIVE;
+
+    if (!strcasecmp(ext, "c") || !strcasecmp(ext, "h") || !strcasecmp(ext, "py") ||
+        !strcasecmp(ext, "cpp") || !strcasecmp(ext, "js"))
+        return FT_CODE;
+
+    return FT_OTHER;
+}
+
+const char *get_icon(enum FileType t) {
+    switch (t) {
+        case FT_DIR:    return "📁";
+        case FT_EXEC:   return "⚙️";
+        case FT_TEXT:   return "📝";
+        case FT_IMAGE:  return "🖼️";
+        case FT_AUDIO:  return "🎵";
+        case FT_VIDEO:  return "🎬";
+        case FT_ARCHIVE:return "📦";
+        case FT_CODE:   return "💻";
+        default:        return "📄";
+    }
+}
+
 
 typedef struct {
     char path[PATH_MAX_LEN];
@@ -28,6 +87,119 @@ void free_items(Panel *p) {
     }
     p->count = 0;
 }
+
+int sort_popup() {
+    const char *options[] = {
+        "Name (A → Z)",
+        "Name (Z → A)",
+        "Size (small → large)",
+        "Size (large → small)",
+        "Date (old → new)",
+        "Date (new → old)"
+    };
+    const int count = sizeof(options) / sizeof(options[0]);
+
+    int h, w;
+    getmaxyx(stdscr, h, w);
+
+    int win_h = count + 4;
+    int win_w = 30;
+    int win_y = (h - win_h) / 2;
+    int win_x = (w - win_w) / 2;
+
+    WINDOW *win = newwin(win_h, win_w, win_y, win_x);
+    keypad(win, TRUE);        // REQUIRED for arrow keys
+    box(win, 0, 0);
+    mvwprintw(win, 1, 2, "Sort by:");
+
+    int idx = 0;
+
+    while (1) {
+        for (int i = 0; i < count; i++) {
+            if (i == idx)
+                wattron(win, A_REVERSE);
+            mvwprintw(win, 3 + i, 2, "%-26s", options[i]);
+            wattroff(win, A_REVERSE);
+        }
+
+        wrefresh(win);
+
+        int ch = wgetch(win);
+
+        if (ch == KEY_UP)
+            idx = (idx - 1 + count) % count;
+        else if (ch == KEY_DOWN)
+            idx = (idx + 1) % count;
+        else if (ch == '\n' || ch == KEY_ENTER) {
+            delwin(win);
+            return idx;
+        }
+        else if (ch == 27) {  // ESC
+            delwin(win);
+            return -1;
+        }
+    }
+}
+
+
+void sort_items(Panel *p, int mode) {
+    // Skip ".." at index 0
+    int start = 1;
+    int count = p->count - 1;
+
+    // Build array of full paths for sorting
+    char fullpaths[count][PATH_MAX_LEN];
+    for (int i = 0; i < count; i++) {
+        snprintf(fullpaths[i], PATH_MAX_LEN, "%s\\%s", p->path, p->items[start + i]);
+    }
+
+    // Sorting function
+    for (int i = 0; i < count - 1; i++) {
+        for (int j = i + 1; j < count; j++) {
+
+            int cmp = 0;
+
+            if (mode == 0) { // Name A→Z
+                cmp = strcmp(p->items[start + i], p->items[start + j]);
+            }
+            else if (mode == 1) { // Name Z→A
+                cmp = strcmp(p->items[start + j], p->items[start + i]);
+            }
+            else if (mode == 2) { // Size small→large
+                struct stat si, sj;
+                stat(fullpaths[i], &si);
+                stat(fullpaths[j], &sj);
+                cmp = (si.st_size > sj.st_size);
+            }
+            else if (mode == 3) { // Size large→small
+                struct stat si, sj;
+                stat(fullpaths[i], &si);
+                stat(fullpaths[j], &sj);
+                cmp = (si.st_size < sj.st_size);
+            }
+            else if (mode == 4) { // Date old→new
+                struct stat si, sj;
+                stat(fullpaths[i], &si);
+                stat(fullpaths[j], &sj);
+                cmp = (si.st_mtime > sj.st_mtime);
+            }
+            else if (mode == 5) { // Date new→old
+                struct stat si, sj;
+                stat(fullpaths[i], &si);
+                stat(fullpaths[j], &sj);
+                cmp = (si.st_mtime < sj.st_mtime);
+            }
+
+            if (cmp) {
+                char tmp[PATH_MAX_LEN];   // ⭐ FIXED HERE ⭐
+                strcpy(tmp, p->items[start + i]);
+                strcpy(p->items[start + i], p->items[start + j]);
+                strcpy(p->items[start + j], tmp);
+            }
+        }
+    }
+}
+
 
 void run_file(const char *path, const char *name) {
     char full[PATH_MAX_LEN];
@@ -491,11 +663,16 @@ int main(void) {
     start_color();
 use_default_colors();
 
-init_pair(1, COLOR_CYAN,  COLOR_BLUE);  // directories
-init_pair(2, COLOR_GREEN, COLOR_BLUE);  // executables
-init_pair(3, COLOR_WHITE, COLOR_BLUE);  // normal files
-
 init_pair(10, COLOR_WHITE, COLOR_BLUE); // general background / bottom bar
+init_pair(1, COLOR_CYAN,  COLOR_BLUE);   // directories
+init_pair(2, COLOR_GREEN, COLOR_BLUE);   // executables
+init_pair(3, COLOR_WHITE, COLOR_BLUE);   // text files
+init_pair(4, COLOR_MAGENTA, COLOR_BLUE); // images
+init_pair(5, COLOR_YELLOW, COLOR_BLUE);  // audio
+init_pair(6, COLOR_RED, COLOR_BLUE);     // video
+init_pair(7, COLOR_CYAN, COLOR_BLUE);    // archives
+init_pair(8, COLOR_WHITE, COLOR_BLUE);   // code files
+init_pair(9, COLOR_WHITE, COLOR_BLUE);   // other
 
 
     list_dir(&left);
@@ -520,7 +697,7 @@ init_pair(10, COLOR_WHITE, COLOR_BLUE); // general background / bottom bar
 
     attron(COLOR_PAIR(10));
     mvprintw(h - 1, 1,
-             "F2 Cmd  F4 Edit  F5 Copy  F6 Move  F7 Input dir  F8 Delete  Tab Switch  PgUp/PgDn Home/End  q Quit");
+             "F2 Cmd  F4 Edit  F5 Copy  F6 Move  F7 Input dir  F8 Delete  Tab Switch  PgUp/PgDn Home/End  s Sort  q Quit");
     attroff(COLOR_PAIR(10));
 
     refresh();
@@ -592,6 +769,19 @@ init_pair(10, COLOR_WHITE, COLOR_BLUE); // general background / bottom bar
             p->scroll = p->count - visible;
             if (p->scroll < 0) p->scroll = 0;
         }
+
+
+    else if (ch == 's' || ch == 'S') {
+    int mode = sort_popup();
+    if (mode >= 0) {
+        Panel *p = active_left ? &left : &right;
+        sort_items(p, mode);
+        p->index = 0;
+        p->scroll = 0;
+
+        snprintf(message, sizeof(message), "Sorted using mode %d", mode);
+    }
+}
 
 else if (ch == KEY_ENTER || ch == '\n') {
     Panel *p = active_left ? &left : &right;
