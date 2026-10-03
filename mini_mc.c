@@ -510,22 +510,56 @@ void draw_title_bar(Panel *p, int startx, int width) {
     attroff(COLOR_PAIR(10));
 }
 
+const char* icon_for(const char *dir, const char *name) {
+    static char *folder = "[D]";
+    static char *file   = "[F]";
+    static char *exe    = "[X]";
+    static char *py     = "[P]";
+    static char *txt    = "[T]";
+    static char *zip    = "[Z]";
+    static char *img    = "[I]";
+
+    char full[PATH_MAX_LEN];
+    snprintf(full, sizeof(full), "%s/%s", dir, name);
+
+    if (strcmp(name, "..") == 0) return folder;
+
+    struct stat st;
+    if (stat(full, &st) == 0 && S_ISDIR(st.st_mode))
+        return folder;
+
+    const char *ext = strrchr(name, '.');
+    if (!ext) return file;
+
+    if (_stricmp(ext, ".exe") == 0) return exe;
+    if (_stricmp(ext, ".py")  == 0) return py;
+    if (_stricmp(ext, ".txt") == 0) return txt;
+    if (_stricmp(ext, ".zip") == 0 ||
+        _stricmp(ext, ".rar") == 0 ||
+        _stricmp(ext, ".7z")  == 0) return zip;
+
+    if (_stricmp(ext, ".png") == 0 ||
+        _stricmp(ext, ".jpg") == 0 ||
+        _stricmp(ext, ".jpeg") == 0 ||
+        _stricmp(ext, ".gif") == 0 ||
+        _stricmp(ext, ".bmp") == 0) return img;
+
+    return file;
+}
+
 void draw_panel(Panel *p, int active, int startx, int width) {
     int h, w;
     getmaxyx(stdscr, h, w);
     int visible = h - 3;
 
-    wbkgd(stdscr, COLOR_PAIR(10));   // ensures panel area inherits blue background
+    wbkgd(stdscr, COLOR_PAIR(10));
 
-
-    // FILL PANEL AREA WITH BLUE BACKGROUND
     for (int y = 1; y < h - 1; y++) {
         for (int x = startx; x < startx + width; x++) {
             mvaddch(y, x, ' ' | COLOR_PAIR(10));
         }
     }
 
-    // WHITE FRAME
     attron(COLOR_PAIR(20));
     mvvline(1, startx, ACS_VLINE, h - 2);
     mvvline(1, startx + width - 1, ACS_VLINE, h - 2);
@@ -533,7 +567,6 @@ void draw_panel(Panel *p, int active, int startx, int width) {
     mvhline(h - 1, startx, ACS_HLINE, width);
     attroff(COLOR_PAIR(20));
 
-    // TITLE BAR
     attron(COLOR_PAIR(20));
     mvprintw(0, startx + 1, "%.*s", width - 2, p->path);
     attroff(COLOR_PAIR(20));
@@ -549,17 +582,11 @@ void draw_panel(Panel *p, int active, int startx, int width) {
         char fullpath[PATH_MAX_LEN];
         snprintf(fullpath, sizeof(fullpath), "%s/%s", p->path, name);
 
-        // Determine color
-        int color = 0;
-        if (is_dir(p->path, name)) {
-            color = COLOR_PAIR(1);
-        } else if (is_exec(p->path, name)) {
-            color = COLOR_PAIR(2);
-        } else {
-            color = COLOR_PAIR(3);
-        }
+        int color;
+        if (is_dir(p->path, name)) color = COLOR_PAIR(1);
+        else if (is_exec(p->path, name)) color = COLOR_PAIR(2);
+        else color = COLOR_PAIR(3);
 
-        // File stats
         struct stat st;
         long size = 0;
         time_t mtime = 0;
@@ -574,8 +601,11 @@ void draw_panel(Panel *p, int active, int startx, int width) {
         format_size(size, sizebuf, sizeof(sizebuf));
         format_date(mtime, datebuf, sizeof(datebuf));
 
+        const char *icon = icon_for(p->path, name);
+
         char line[256];
-        snprintf(line, sizeof(line), "%-30s %10s  %s", name, sizebuf, datebuf);
+        snprintf(line, sizeof(line), "%s %-28s %10s  %s",
+                 icon, name, sizebuf, datebuf);
 
         int attr = A_NORMAL;
         if (active && i == p->index)
@@ -585,7 +615,6 @@ void draw_panel(Panel *p, int active, int startx, int width) {
         mvchgat(y, startx + 1, width - 2, attr | color, 0, NULL);
     }
 }
-
 
 void edit_file(const char *dir, const char *name) {
     char full[PATH_MAX_LEN];
@@ -894,8 +923,6 @@ else if (ch == KEY_ENTER || ch == '\n') {
         snprintf(message, sizeof(message), "Invalid directory: %s", newpath);
     }
 }
-
-
 
         else if (ch == KEY_F(8)) {
             Panel *p = active_left ? &left : &right;
