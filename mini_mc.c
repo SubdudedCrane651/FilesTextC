@@ -25,6 +25,10 @@ enum FileType {
 #define MAX_ITEMS 2048
 #define PATH_MAX_LEN 4096
 
+int show_cmd = 0;
+char cmd_path[PATH_MAX_LEN];
+char cmd[256];        // <-- THIS FIXES YOUR ERROR
+
 enum FileType detect_type(const char *name) {
     // Directories handled separately
     const char *ext = strrchr(name, '.');
@@ -65,6 +69,19 @@ typedef struct {
     int scroll;
     char path[PATH_MAX_LEN];
 } Panel;
+
+
+char cmd_path[PATH_MAX_LEN];
+
+void draw_cmd_prompt(void) {
+    int h, w;
+    getmaxyx(stdscr, h, w);
+
+    attron(COLOR_PAIR(20));
+    mvhline(h - 2, 1, ' ', w - 2);
+    mvprintw(h - 2, 1, "%s> %s", cmd_path, cmd);
+    attroff(COLOR_PAIR(20));
+}
 
 
 void free_items(Panel *p) {
@@ -667,7 +684,6 @@ char *input_box(const char *prompt) {
     return buffer;
 }
 
-
 int main(void) {
     Panel left, right;
     getcwd(left.path, sizeof(left.path));
@@ -716,6 +732,9 @@ init_pair(9, COLOR_WHITE, COLOR_BLUE);   // other
     draw_panel(&right, !active_left, half, w - half);
 
     draw_title_bar(active_left ? &left : &right, 0, w);
+
+    if (show_cmd)
+    draw_cmd_prompt();
 
     attron(COLOR_PAIR(10));
     mvprintw(h - 1, 1,
@@ -848,11 +867,23 @@ else if (ch == KEY_ENTER || ch == '\n') {
 }
 
   
-        else if (ch == KEY_F(2)) {
-            command_line();
-            list_dir(&left);
-            list_dir(&right);
-        }
+else if (ch == KEY_F(2)) {
+    Panel *p = active_left ? &left : &right;
+
+    // Build command: open cmd.exe in the panel's directory
+    char launch[PATH_MAX_LEN + 32];
+    snprintf(launch, sizeof(launch), "cmd.exe /K cd /d \"%s\"", p->path);
+
+    // Suspend curses
+    endwin();
+
+    // Launch real terminal
+    system(launch);
+
+    // Resume curses
+    refresh();
+    clear();
+}
 
         else if (ch == KEY_F(4)) {
             Panel *p = active_left ? &left : &right;
