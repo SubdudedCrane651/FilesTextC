@@ -58,21 +58,6 @@ enum FileType detect_type(const char *name) {
     return FT_OTHER;
 }
 
-const char *get_icon(enum FileType t) {
-    switch (t) {
-        case FT_DIR:    return "📁";
-        case FT_EXEC:   return "⚙️";
-        case FT_TEXT:   return "📝";
-        case FT_IMAGE:  return "🖼️";
-        case FT_AUDIO:  return "🎵";
-        case FT_VIDEO:  return "🎬";
-        case FT_ARCHIVE:return "📦";
-        case FT_CODE:   return "💻";
-        default:        return "📄";
-    }
-}
-
-
 typedef struct {
     char *items[MAX_ITEMS];   // MUST be pointers
     int count;
@@ -615,6 +600,7 @@ void draw_panel(Panel *p, int active, int startx, int width) {
         mvchgat(y, startx + 1, width - 2, attr | color, 0, NULL);
     }
 }
+
 
 void edit_file(const char *dir, const char *name) {
     char full[PATH_MAX_LEN];
